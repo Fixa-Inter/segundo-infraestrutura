@@ -622,12 +622,13 @@ try:
 
     expected = f"APAGAR-FIXA-{account}"
 
-    # A confirmacao usa o terminal porque stdin contem este script.
-    with open("/dev/tty", "r+") as terminal:
-        terminal.write(
-            f"Digite {expected} para confirmar: "
-        )
-        terminal.flush()
+    print(
+        f"Digite {expected} para confirmar: ",
+        end="",
+        flush=True,
+    )
+
+    with open("/dev/tty", "r", encoding="utf-8") as terminal:
         confirmation = terminal.readline().strip()
 
     if confirmation != expected:
