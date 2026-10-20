@@ -1,99 +1,175 @@
-
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TF_DIR="${ROOT}/terraform"
-REGION="us-east-1"
-VERSION="${1:-v1}"
+cd "$ROOT"
 
-for cmd in aws terraform docker git python3; do
-  command -v "$cmd" >/dev/null || {
-    echo "Dependencia ausente: $cmd"
-    exit 1
-  }
-done
+# Funções compartilhadas:
+# identificação da conta, State isolado, lock e plano com confirmação.
+source "$ROOT/scripts/common.sh"
 
-if [[ ! "$VERSION" =~ ^[A-Za-z0-9_.-]+$ ]]; then
-  echo "Versao de imagem invalida"
-  exit 1
+VERSION="${1:-}"
+
+if [[ "$#" != 1 || ! "$VERSION" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+  fail "Uso: bash deploy.sh firebase-01"
 fi
 
-ACCOUNT_ID=$(aws sts get-caller-identity \
-  --query Account --output text)
+step() {
+  echo
+  echo "[$1/9] $2"
+}
 
-STATE_DIR="${ROOT}/.states/${ACCOUNT_ID}"
-mkdir -p "$STATE_DIR"
-chmod 700 "$STATE_DIR"
+install_terraform() {
+  local wanted current tfenv_dir
 
-export TF_DATA_DIR="${STATE_DIR}/.terraform"
-export AWS_DEFAULT_REGION="$REGION"
+  [[ -f "$ROOT/.terraform-version" ]] ||
+    fail "Arquivo .terraform-version ausente"
 
-echo "===================================="
-echo "      FIXA - DEPLOY AUTOMATICO"
-echo "===================================="
-echo "Conta: $ACCOUNT_ID"
-echo "Regiao: $REGION"
-echo "Versao: $VERSION"
-echo ""
+  wanted=$(tr -d '[:space:]' < "$ROOT/.terraform-version")
 
-# Etapa 1: prepara Terraform
-echo "[1/4] Inicializando Terraform..."
+  [[ "$wanted" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+    fail "Versao Terraform invalida"
 
-terraform -chdir="$TF_DIR" init \
-  -reconfigure \
-  -backend-config="path=${STATE_DIR}/terraform.tfstate" \
-  -input=false
+  current=""
+
+  # Reutiliza o Terraform instalado quando a versão corresponde ao projeto.
+  if command -v terraform >/dev/null 2>&1; then
+    if current=$(
+      terraform version -json 2>/dev/null |
+        python3 -c '
+import json
+import sys
+print(json.load(sys.stdin)["terraform_version"])
+'
+    ); then
+      :
+    else
+      current=""
+    fi
+  fi
+
+  if [[ "$current" == "$wanted" ]]; then
+    echo "Terraform $wanted ja disponivel."
+    return
+  fi
+
+  # Instala o gerenciador de versões quando necessário.
+  tfenv_dir="$HOME/.tfenv"
+
+  if [[ ! -e "$tfenv_dir" ]]; then
+    git clone --depth=1 \
+      https://github.com/tfutils/tfenv.git \
+      "$tfenv_dir"
+  fi
+
+  [[ -x "$tfenv_dir/bin/tfenv" ]] ||
+    fail "Instalacao tfenv incompleta em $tfenv_dir"
+
+  export PATH="$tfenv_dir/bin:$PATH"
+
+  tfenv install "$wanted"
+  tfenv use "$wanted"
+
+  current=$(
+    terraform version -json |
+      python3 -c '
+import json
+import sys
+print(json.load(sys.stdin)["terraform_version"])
+'
+  )
+
+  [[ "$current" == "$wanted" ]] ||
+    fail "Terraform selecionado nao corresponde ao projeto"
+}
+
+step 1 "Verificando ferramentas e arquivos"
+
+# Terraform será instalado automaticamente.
+# As demais ferramentas precisam estar disponíveis no CloudShell.
+for cmd in aws git docker python3 curl unzip flock; do
+  command -v "$cmd" >/dev/null 2>&1 ||
+    fail "Dependencia ausente: $cmd"
+done
+
+for file in \
+  terraform/firebase.tf \
+  scripts/upload-firebase.py \
+  scripts/activation.sh \
+  runtime/mobile/Dockerfile \
+  runtime/mobile/entrypoint.py
+do
+  [[ -f "$ROOT/$file" ]] ||
+    fail "Arquivo ausente: $file. Use o projeto atualizado completo."
+done
+
+chmod +x "$ROOT"/scripts/*.sh
+
+docker info >/dev/null 2>&1 ||
+  fail "Docker indisponivel; inicie o Docker antes de continuar"
+
+step 2 "Validando os quatro .env e env/firebase.json"
+
+# Somente validação local; não envia segredos nesta etapa.
+python3 "$ROOT/scripts/sync-secrets.py" all --check
+
+step 3 "Preparando o Terraform"
+
+install_terraform
+
+step 4 "Identificando conta e inicializando o State"
+
+# Obtém a conta por STS e configura:
+# .states/<conta>/us-east-1/
+init_context
+
+echo "Conta: $ACCOUNT_ID | Regiao: $REGION"
 
 terraform -chdir="$TF_DIR" validate
 
-# Etapa 2: cria infraestrutura declarada
-echo "[2/4] Planejando infraestrutura..."
+# Confere conflitos com recursos existentes e rotas das subnets.
+python3 "$ROOT/scripts/preflight.py" \
+  "$STATE_DIR/terraform.tfstate"
 
-terraform -chdir="$TF_DIR" plan \
-  -out="${STATE_DIR}/deploy.tfplan"
+step 5 "Criando infraestrutura e bucket privado"
 
-read -r -p \
-  "Aplicar o plano acima? (sim/nao): " \
-  CONFIRM
+# firebase.tf cria o bucket dentro do mesmo State.
+# O plano é mostrado e exige confirmação antes do apply.
+plan_apply infraestrutura
 
-if [[ "$CONFIRM" != "sim" ]]; then
-  echo "Operacao cancelada."
-  exit 0
-fi
+step 6 "Enviando env/firebase.json ao S3"
 
-terraform -chdir="$TF_DIR" apply \
-  "${STATE_DIR}/deploy.tfplan"
+# Valida o arquivo, verifica proteção do bucket,
+# envia o objeto e confere o checksum.
+python3 "$ROOT/scripts/upload-firebase.py" \
+  --state-dir "$STATE_DIR"
 
-rm -f "${STATE_DIR}/deploy.tfplan"
+step 7 "Sincronizando fontes e publicando imagens"
 
-# Etapa 4: compila e publica imagens
-echo "[4/4] Construindo e publicando Docker..."
+# Esse script já sincroniza os repositórios antes do build.
+# O Mobile recebe o inicializador que baixa o Firebase antes do Java.
+bash "$ROOT/scripts/build-images.sh" all "$VERSION"
 
-# build-images.sh ja identifica a conta e
-# envia as imagens para os respectivos ECRs.
-"$ROOT/scripts/build-images.sh" all "$VERSION"
+step 8 "Sincronizando configuracoes e segredos SSM"
 
-echo ""
-echo "[5/5] Sincronizando variaveis e segredos..."
+python3 "$ROOT/scripts/sync-secrets.py" \
+  all \
+  --region "$REGION"
 
-"$ROOT/scripts/setup-env.sh"
+step 9 "Validando certificado, ativando APIs e verificando saude"
 
-echo ""
-read -r -p \
-  "Ativar as quatro APIs agora? (sim/nao): " \
-  ACTIVATE
+# Reutiliza o contexto e o lock atuais.
+source "$ROOT/scripts/activation.sh"
 
-if [[ "$ACTIVATE" == "sim" ]]; then
-  "$ROOT/scripts/activate-apis.sh" "$VERSION"
-fi
+# Confere ACM, aplica a ativação e testa ECS, targets e HTTPS.
+activate "$VERSION"
 
-echo ""
-echo "===================================="
-echo "   FIXA - PREPARACAO CONCLUIDA"
-echo "===================================="
-echo "Conta AWS: $ACCOUNT_ID"
-echo "Versao Docker: $VERSION"
-echo "Segredos SSM sincronizados."
-echo ""
-echo "Proxima fase: ativacao dos ECS Services."
+echo
+echo "Deploy concluido e APIs verificadas no novo ALB."
+
+terraform -chdir="$TF_DIR" output api_hostnames
+
+echo
+echo "Para revisar e aplicar a migracao DNS de trafego:"
+echo "./scripts/hostinger-dns.sh traffic --apply"

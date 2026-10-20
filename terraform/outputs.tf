@@ -67,9 +67,10 @@ output "api_services" {
   value = {
     for name, api in module.api :
     name => {
-      service = api.service_name
-      host    = api.hostname
+      service      = api.service_name
+      host         = api.hostname
       target_group = api.target_group_arn
     }
   }
 }
+output "aws_region" { value = var.aws_region }

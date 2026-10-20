@@ -37,34 +37,34 @@ locals {
     if contains(var.enabled_apis, name)
   }
 
-  
+
   api_settings = {
     mobile = {
-        cpu         = 512
-        memory      = 1024
-        health_path = "/actuator/health"
-        priority    = 10
+      cpu         = 512
+      memory      = 1024
+      health_path = "/actuator/health"
+      priority    = 10
     }
-    
+
     web = {
-        cpu         = 512
-        memory      = 1024
-        health_path = "/actuator/health"
-        priority    = 20
+      cpu         = 512
+      memory      = 1024
+      health_path = "/actuator/health"
+      priority    = 20
     }
-    
+
     nosql = {
-        cpu         = 512
-        memory      = 1024
-        health_path = "/actuator/health"
-        priority    = 30
+      cpu         = 512
+      memory      = 1024
+      health_path = "/actuator/health"
+      priority    = 30
     }
-    
+
     ia = {
-        cpu         = 512
-        memory      = 1024
-        health_path = "/api/v1/health"
-        priority    = 40
+      cpu         = 512
+      memory      = 1024
+      health_path = "/api/v1/health"
+      priority    = 40
     }
   }
 
@@ -111,28 +111,9 @@ module "api" {
   task_role_arn      = data.aws_iam_role.lab.arn
   aws_region         = var.aws_region
 
-  environment = {
-    for line in split(
-      "\n",
-      try(file("${path.module}/../env/${each.key}.public.env"), "")
-    ) :
-    split("=", trimspace(line))[0] => trimprefix(
-      trimspace(line),
-      "${split("=", trimspace(line))[0]}="
-    )
-    if can(regex("^[A-Za-z_][A-Za-z0-9_]*=", trimspace(line)))
-  }
-
-  secrets = {
-    for name in jsondecode(
-      try(file("${path.module}/../env/${each.key}.secrets.json"), "[]")
-    ) :
-    name => format(
-      "arn:aws:ssm:%s:%s:parameter/fixa/%s/%s",
-      var.aws_region,
-      data.aws_caller_identity.current.account_id,
-      each.key,
-      replace(lower(name), "_", "-")
-    )
-  }
+  environment = merge(
+    jsondecode(file("${var.manifest_dir}/${each.key}.public.json")),
+    each.key == "mobile" ? jsondecode(file("${var.manifest_dir}/mobile.firebase.json")) : {}
+  )
+  secrets = jsondecode(file("${var.manifest_dir}/${each.key}.secrets.json"))
 }

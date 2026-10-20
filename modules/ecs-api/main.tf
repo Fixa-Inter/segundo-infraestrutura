@@ -61,6 +61,10 @@ resource "aws_lb_target_group" "api" {
 
 # Task Definition
 resource "aws_ecs_task_definition" "api" {
+  lifecycle {
+    create_before_destroy = true
+  }
+
   family                   = local.api_name
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"

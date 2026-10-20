@@ -1,2 +1,1 @@
-enabled_apis = ["mobile", "web", "nosql", "ia"]
-enable_https = true
+# Fases ativas sao mantidas por conta em .states/. Nao habilite APIs aqui.

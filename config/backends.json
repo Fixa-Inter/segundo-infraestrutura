@@ -1,0 +1,120 @@
+{
+  "mobile": {
+    "required": [
+      "DB_URL",
+      "DB_USERNAME",
+      "DB_PASSWORD",
+      "REDIS_HOST",
+      "REDIS_PASSWORD",
+      "JWT_SECRET",
+      "MAIL_HOST",
+      "MAIL_USERNAME",
+      "MAIL_PASSWORD",
+      "FIREBASE_CREDENTIALS_PATH"
+    ],
+    "url_schemes": {
+      "DB_URL": [
+        "jdbc:postgresql"
+      ]
+    }
+  },
+  "nosql": {
+    "required": [
+      "DB_URL",
+      "DB_USERNAME",
+      "DB_PASSWORD",
+      "REDIS_HOST",
+      "REDIS_PASSWORD",
+      "JWT_SECRET",
+      "MONGODB_URI"
+    ],
+    "url_schemes": {
+      "DB_URL": [
+        "jdbc:postgresql"
+      ],
+      "MONGODB_URI": [
+        "mongodb",
+        "mongodb+srv"
+      ]
+    }
+  },
+  "web": {
+    "required": [
+      "SPRING_DATASOURCE_URL",
+      "SPRING_DATASOURCE_USERNAME",
+      "SPRING_DATASOURCE_PASSWORD",
+      "SPRING_DATA_REDIS_HOST",
+      "SPRING_DATA_REDIS_PASSWORD",
+      "SPRING_MAIL_HOST",
+      "SPRING_MAIL_USERNAME",
+      "SPRING_MAIL_PASSWORD",
+      "SECURITY_JWT_SECRET",
+      "SECURITY_JWT_EXPIRATIONSECONDS"
+    ],
+    "aliases": {
+      "DB_URL": "SPRING_DATASOURCE_URL",
+      "DB_USERNAME": "SPRING_DATASOURCE_USERNAME",
+      "DB_PASSWORD": "SPRING_DATASOURCE_PASSWORD",
+      "REDIS_HOST": "SPRING_DATA_REDIS_HOST",
+      "REDIS_PORT": "SPRING_DATA_REDIS_PORT",
+      "REDIS_USERNAME": "SPRING_DATA_REDIS_USERNAME",
+      "REDIS_PASSWORD": "SPRING_DATA_REDIS_PASSWORD",
+      "MAIL_HOST": "SPRING_MAIL_HOST",
+      "MAIL_PORT": "SPRING_MAIL_PORT",
+      "MAIL_USERNAME": "SPRING_MAIL_USERNAME",
+      "MAIL_PASSWORD": "SPRING_MAIL_PASSWORD",
+      "JWT_SECRET": "SECURITY_JWT_SECRET",
+      "JWT_EXPIRATION_SECONDS": "SECURITY_JWT_EXPIRATIONSECONDS",
+      "SECURITY_JWT_EXPIRATION_SECONDS": "SECURITY_JWT_EXPIRATIONSECONDS"
+    },
+    "url_schemes": {
+      "SPRING_DATASOURCE_URL": [
+        "jdbc:postgresql"
+      ]
+    }
+  },
+  "ia": {
+    "required": [
+      "GEMINI_API_KEY",
+      "GROQ_API_KEY",
+      "OPENAI_API_KEY",
+      "DATABASE_URL_SOLICITANTE",
+      "DATABASE_URL_TECNICO",
+      "DATABASE_URL_GESTOR",
+      "MONGO_URI",
+      "QDRANT_API_KEY",
+      "QDRANT_URL",
+      "FIXA_API_BASE_URL"
+    ],
+    "url_schemes": {
+      "MONGO_URI": [
+        "mongodb",
+        "mongodb+srv"
+      ],
+      "QDRANT_URL": [
+        "https"
+      ],
+      "FIXA_API_BASE_URL": [
+        "https"
+      ],
+      "DATABASE_URL_SOLICITANTE": [
+        "postgres",
+        "postgresql",
+        "postgresql+asyncpg",
+        "postgresql+psycopg"
+      ],
+      "DATABASE_URL_TECNICO": [
+        "postgres",
+        "postgresql",
+        "postgresql+asyncpg",
+        "postgresql+psycopg"
+      ],
+      "DATABASE_URL_GESTOR": [
+        "postgres",
+        "postgresql",
+        "postgresql+asyncpg",
+        "postgresql+psycopg"
+      ]
+    }
+  }
+}

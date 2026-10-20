@@ -1,19 +1,13 @@
-# Configuracoes privadas
-env/*.env
-env/*.secrets.json
-.env
-.env.*
-
-# Terraform
-.terraform/
+# Configuracoes privadas e artefatos locais
+env/*
+!env/.gitkeep
 .states/
+.terraform/
 *.tfstate
 *.tfstate.*
 *.tfplan
-
-# Codigos clonados
+.env
+.env.*
 apps/
-
-# Python
 __pycache__/
 *.pyc

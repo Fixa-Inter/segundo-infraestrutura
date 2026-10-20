@@ -5,8 +5,8 @@ resource "aws_ecr_repository" "apis" {
 
   image_tag_mutability = "IMMUTABLE"
 
-  # Permite apagar os repositorios mesmo com imagens
-  force_delete = true
+  # Imagens sao esvaziadas apenas com destroy.sh --delete-images
+  force_delete = false
 
   image_scanning_configuration {
     scan_on_push = true

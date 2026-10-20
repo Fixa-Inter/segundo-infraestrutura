@@ -47,3 +47,12 @@ variable "image_tags" {
     ia     = "v1"
   }
 }
+variable "manifest_dir" {
+  description = "Diretorio absoluto de manifestos da conta e regiao atuais"
+  type        = string
+  default     = "../env"
+}
+variable "expected_account_id" {
+  type    = string
+  default = null
+}

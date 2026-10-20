@@ -72,11 +72,11 @@ variable "aws_region" {
 }
 
 variable "environment" {
-  type = map(string)
+  type    = map(string)
   default = {}
 }
 
 variable "secrets" {
-  type = map(string)
+  type    = map(string)
   default = {}
 }
