@@ -5,6 +5,11 @@ umask 077
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
+[[ -s "$ROOT/env/hostinger.token" ]] ||
+  fail "Arquivo env/hostinger.token ausente ou vazio"
+
+chmod 600 "$ROOT/env/hostinger.token"
+
 # Funções compartilhadas:
 # identificação da conta, State isolado, lock e plano com confirmação.
 source "$ROOT/scripts/common.sh"
@@ -159,17 +164,26 @@ python3 "$ROOT/scripts/sync-secrets.py" \
 
 step 9 "Validando certificado, ativando APIs e verificando saude"
 
-# Reutiliza o contexto e o lock atuais.
 source "$ROOT/scripts/activation.sh"
 
-# Confere ACM, aplica a ativação e testa ECS, targets e HTTPS.
+# Publica os CNAMEs de validacao ACM quando necessario,
+# aguarda o certificado, ativa as APIs e verifica sua saude.
 activate "$VERSION"
 
 echo
-echo "Deploy concluido e APIs verificadas no novo ALB."
+echo "Publicando os CNAMEs das APIs na Hostinger..."
+
+# Usa o contexto e o lock ja adquiridos pelo deploy.
+# O modo traffic verifica novamente as APIs antes de alterar o DNS.
+python3 "$ROOT/scripts/hostinger-dns.py" \
+  traffic \
+  "$STATE_DIR" \
+  --apply
+
+echo
+echo "Deploy concluido; registros conferidos na API Hostinger."
 
 terraform -chdir="$TF_DIR" output api_hostnames
 
 echo
-echo "Para revisar e aplicar a migracao DNS de trafego:"
-echo "./scripts/hostinger-dns.sh traffic --apply"
+echo "A propagacao publica do DNS ainda pode levar algum tempo."
