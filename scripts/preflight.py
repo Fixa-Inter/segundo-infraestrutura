@@ -21,7 +21,7 @@ if not any(x.get('mode') == 'managed' for x in resources):
     if any(x['LoadBalancerName']=='fixa-alb' for x in lbs) or any(x['repositoryName'].startswith('fixa/') for x in ecr) or any(x.endswith('/cluster-fixa') for x in clusters) or any(x['GroupName'] in ['fixa-alb', *['fixa-'+a+'-api' for a in ('mobile','web','nosql','ia')]] for x in groups) or logs:
         sys.exit('Recursos FIXA existentes sem State correspondente. Nenhum import automatico. Use outra conta ou recupere o State correto.')
 # Evita adotar por engano um bucket de outro State, inclusive em apply parcial.
-if not any(r.get('mode')=='managed' and r.get('type')=='aws_s3_bucket' and r.get('name')=='firebase' for r in resources):
+if not any(r.get('mode')=='managed' and (r.get('type'), r.get('name')) in {('aws_s3_bucket','firebase'),('terraform_data','firebase_bucket')} for r in resources):
     account=aws('sts','get-caller-identity')['Account']
     probe=subprocess.run(['aws','s3api','head-bucket','--bucket',f'fixa-secrets-{account}-us-east-1','--expected-bucket-owner',account,'--region','us-east-1','--no-cli-pager'],capture_output=True,text=True)
     if probe.returncode==0:

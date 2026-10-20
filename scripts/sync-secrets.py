@@ -18,10 +18,40 @@ def aws(*args, payload=None):
                               input=json.dumps(payload) if payload is not None else None,
                               text=True, capture_output=True)
     if response.returncode:
-        # AWS pode ecoar entrada na mensagem de erro. Exibimos somente codigo.
         import re
+
         code = re.search(r'\((\w+)\)', response.stderr)
-        raise ConfigError('AWS: ' + (code[1] if code else 'falha; confira credenciais, rede e permissoes'))
+        error_code = code[1] if code else 'FalhaAWS'
+
+        if error_code == 'ParamValidation':
+            issues = []
+
+            for line in response.stderr.splitlines():
+                match = re.search(
+                    r'Invalid (type|length|value|range) for parameter '
+                    r'([A-Za-z0-9_.\[\]-]+)(?:,|:)',
+                    line,
+                )
+                if match:
+                    issues.append(f'{match[2]}: {match[1]} invalido')
+
+                match = re.search(
+                    r'(Missing required|Unknown) parameter in input: '
+                    r'"([A-Za-z0-9_]+)"',
+                    line,
+                )
+                if match:
+                    issues.append(f'{match[2]}: {match[1]}')
+
+            detail = '; '.join(dict.fromkeys(issues))
+            operation = ' '.join(args[:2])
+
+            raise ConfigError(
+                f'AWS: {error_code} | {operation} | '
+                f'{detail or "campo nao identificado"}'
+            )
+
+        raise ConfigError('AWS: ' + error_code)
     return json.loads(response.stdout or '{}')
 
 

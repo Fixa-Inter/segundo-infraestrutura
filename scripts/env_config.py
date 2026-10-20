@@ -71,15 +71,41 @@ def parse_env(text):
 
 
 def validate(api, values, contract):
-    values = dict(values)
+    # Opcionais vazias nao vao ao SSM; as APIs usam seus valores padrao.
+    values = {key: value for key, value in values.items() if value.strip()}
+    for key in contract.get('booleans', []):
+        if key in values:
+            normalized = values[key].strip().lower()
+            boolean = {'true': 'true', 'false': 'false', '1': 'true', '0': 'false'}
+            if normalized not in boolean:
+                raise ConfigError(f'{key}: use true ou false')
+            values[key] = boolean[normalized]
     for source, target in contract.get('aliases', {}).items():
         if source in values:
             if target in values and values[target] != values[source]:
                 raise ConfigError(f'{source}/{target}: aliases conflitantes')
-            values[target] = values.pop(source)
+            values[target] = values[source]
+            if not contract.get('preserve_aliases', False):
+                del values[source]
     for key in contract['required']:
         if not values.get(key, '').strip():
             raise ConfigError(f'{key}: obrigatoria ausente ou vazia')
+    for key in contract.get('positive_integers', []):
+        if key in values and (not values[key].isdigit() or int(values[key]) <= 0):
+            raise ConfigError(f'{key}: inteiro positivo esperado')
+    for key in contract.get('nonnegative_integers', []):
+        if key in values and not values[key].isdigit():
+            raise ConfigError(f'{key}: inteiro nao negativo esperado')
+    for key in contract.get('emails', []):
+        if key in values:
+            from email.utils import parseaddr
+            address = parseaddr(values[key])[1]
+            if not re.fullmatch(r'[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+', address):
+                raise ConfigError(f'{key}: endereco de email invalido')
+    if api == 'ia' and values.get('LANGSMITH_TRACING') == 'true' and not values.get('LANGSMITH_API_KEY', '').strip():
+        raise ConfigError('LANGSMITH_API_KEY: obrigatoria quando LANGSMITH_TRACING=true')
+    if api == 'web' and values.get('MAIL_SMTP_STARTTLS_REQUIRED') == 'true' and values.get('MAIL_SMTP_STARTTLS') != 'true':
+        raise ConfigError('MAIL_SMTP_STARTTLS: deve ser true quando STARTTLS e obrigatorio')
     for key, value in list(values.items()):
         if not value:
             # SSM nao aceita strings vazias; opcionais vazias ficam ausentes.
@@ -108,9 +134,9 @@ def validate(api, values, contract):
                     raise ValueError()
             except ValueError:
                 raise ConfigError(f'{key}: numero nao negativo esperado') from None
-        if key == 'JWT_SECRET' and len(value.encode()) < 32:
+        if key == 'JWT_SECRET' and api != 'web' and len(value.encode()) < 32:
             raise ConfigError(f'{key}: necessario ao menos 32 bytes para HMAC SHA256')
-        if key == 'SECURITY_JWT_SECRET':
+        if key == 'SECURITY_JWT_SECRET' or (api == 'web' and key == 'JWT_SECRET'):
             import base64
             import binascii
             try:
@@ -121,10 +147,17 @@ def validate(api, values, contract):
         if key == 'SECURITY_JWT_EXPIRATIONSECONDS' and (not value.isdigit() or int(value) <= 0):
             raise ConfigError(f'{key}: inteiro positivo esperado')
         if key.endswith(('_URL', '_URI')) or key.startswith('DATABASE_URL_'):
-            parsed = urlsplit(value.removeprefix('jdbc:'))
-            if not parsed.scheme or not parsed.hostname:
+            try:
+                parsed = urlsplit(value.removeprefix('jdbc:'))
+                host = parsed.hostname
+                port = parsed.port
+            except ValueError:
+                raise ConfigError(f'{key}: URL invalida') from None
+            if port is not None and not 1 <= port <= 65535:
+                raise ConfigError(f'{key}: porta da URL invalida')
+            if not parsed.scheme or not host:
                 raise ConfigError(f'{key}: URL sem esquema/host valido')
-            if parsed.hostname.lower() in ('localhost', '127.0.0.1', '0.0.0.0', '::1', 'host.docker.internal'):
+            if host.lower() in ('localhost', '127.0.0.1', '0.0.0.0', '::1', 'host.docker.internal'):
                 raise ConfigError(f'{key}: hostname local nao acessa servico externo no Fargate')
         if key.endswith('_HOST') and value.lower() in ('localhost', '127.0.0.1', '::1', 'host.docker.internal'):
             raise ConfigError(f'{key}: host local invalido no Fargate')

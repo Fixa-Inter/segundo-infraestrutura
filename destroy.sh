@@ -481,10 +481,40 @@ def execute(plan, account):
         )
 
     for group in plan["target_groups"]:
-        aws(
-            "elbv2", "delete-target-group",
-            "--target-group-arn", group,
-        )
+        for attempt in range(30):
+            try:
+                aws(
+                    "elbv2", "delete-target-group",
+                    "--target-group-arn", group,
+                    missing=("TargetGroupNotFound",),
+                )
+
+                print("Target Group removido:", group)
+                break
+
+            except RuntimeError as error:
+                code = str(error).rsplit(": ", 1)[-1]
+
+                if code not in (
+                    "ResourceInUse",
+                    "ResourceInUseException",
+                ):
+                    raise
+
+                if attempt == 29:
+                    raise RuntimeError(
+                        "Target Group continua em uso. "
+                        "Revise os listeners e regras associados "
+                        "antes de continuar: " + group
+                    ) from None
+
+                print(
+                    "Aguardando liberacao do Target Group "
+                    f"({attempt + 1}/30)...",
+                    flush=True,
+                )
+
+                time.sleep(10)
 
     for arn in plan["task_definitions"]:
         aws(

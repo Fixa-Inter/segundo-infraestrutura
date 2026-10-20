@@ -1,16 +1,19 @@
 {
   "mobile": {
     "required": [
+      "DB_PASSWORD",
       "DB_URL",
       "DB_USERNAME",
-      "DB_PASSWORD",
-      "REDIS_HOST",
-      "REDIS_PASSWORD",
+      "FIREBASE_CREDENTIALS_PATH",
       "JWT_SECRET",
       "MAIL_HOST",
-      "MAIL_USERNAME",
       "MAIL_PASSWORD",
-      "FIREBASE_CREDENTIALS_PATH"
+      "MAIL_PORT",
+      "MAIL_USERNAME",
+      "REDIS_HOST",
+      "REDIS_PASSWORD",
+      "REDIS_PORT",
+      "REDIS_USERNAME"
     ],
     "url_schemes": {
       "DB_URL": [
@@ -20,13 +23,15 @@
   },
   "nosql": {
     "required": [
+      "DB_PASSWORD",
       "DB_URL",
       "DB_USERNAME",
-      "DB_PASSWORD",
+      "JWT_SECRET",
+      "MONGODB_URI",
       "REDIS_HOST",
       "REDIS_PASSWORD",
-      "JWT_SECRET",
-      "MONGODB_URI"
+      "REDIS_PORT",
+      "REDIS_USERNAME"
     ],
     "url_schemes": {
       "DB_URL": [
@@ -40,36 +45,57 @@
   },
   "web": {
     "required": [
-      "SPRING_DATASOURCE_URL",
-      "SPRING_DATASOURCE_USERNAME",
-      "SPRING_DATASOURCE_PASSWORD",
-      "SPRING_DATA_REDIS_HOST",
-      "SPRING_DATA_REDIS_PASSWORD",
-      "SPRING_MAIL_HOST",
-      "SPRING_MAIL_USERNAME",
-      "SPRING_MAIL_PASSWORD",
-      "SECURITY_JWT_SECRET",
-      "SECURITY_JWT_EXPIRATIONSECONDS"
+      "DB_URL",
+      "DB_USERNAME",
+      "DB_PASSWORD",
+      "JWT_SECRET",
+      "JWT_EXPIRATION_SECONDS",
+      "UPSTASH_REDIS_REST_URL",
+      "UPSTASH_REDIS_REST_TOKEN",
+      "MAIL_HOST",
+      "MAIL_PORT",
+      "MAIL_USERNAME",
+      "MAIL_PASSWORD",
+      "MAIL_FROM",
+      "MAIL_SMTP_AUTH",
+      "MAIL_SMTP_STARTTLS",
+      "MAIL_SMTP_STARTTLS_REQUIRED"
     ],
+    "preserve_aliases": true,
     "aliases": {
       "DB_URL": "SPRING_DATASOURCE_URL",
       "DB_USERNAME": "SPRING_DATASOURCE_USERNAME",
       "DB_PASSWORD": "SPRING_DATASOURCE_PASSWORD",
-      "REDIS_HOST": "SPRING_DATA_REDIS_HOST",
-      "REDIS_PORT": "SPRING_DATA_REDIS_PORT",
-      "REDIS_USERNAME": "SPRING_DATA_REDIS_USERNAME",
-      "REDIS_PASSWORD": "SPRING_DATA_REDIS_PASSWORD",
+      "JWT_SECRET": "SECURITY_JWT_SECRET",
+      "JWT_EXPIRATION_SECONDS": "SECURITY_JWT_EXPIRATIONSECONDS",
       "MAIL_HOST": "SPRING_MAIL_HOST",
       "MAIL_PORT": "SPRING_MAIL_PORT",
       "MAIL_USERNAME": "SPRING_MAIL_USERNAME",
       "MAIL_PASSWORD": "SPRING_MAIL_PASSWORD",
-      "JWT_SECRET": "SECURITY_JWT_SECRET",
-      "JWT_EXPIRATION_SECONDS": "SECURITY_JWT_EXPIRATIONSECONDS",
-      "SECURITY_JWT_EXPIRATION_SECONDS": "SECURITY_JWT_EXPIRATIONSECONDS"
+      "MAIL_SMTP_AUTH": "SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH",
+      "MAIL_SMTP_STARTTLS": "SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE",
+      "MAIL_SMTP_STARTTLS_REQUIRED": "SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED"
     },
+    "booleans": [
+      "MAIL_SMTP_AUTH",
+      "MAIL_SMTP_STARTTLS",
+      "MAIL_SMTP_STARTTLS_REQUIRED"
+    ],
+    "positive_integers": [
+      "JWT_EXPIRATION_SECONDS"
+    ],
+    "emails": [
+      "MAIL_FROM"
+    ],
     "url_schemes": {
+      "DB_URL": [
+        "jdbc:postgresql"
+      ],
       "SPRING_DATASOURCE_URL": [
         "jdbc:postgresql"
+      ],
+      "UPSTASH_REDIS_REST_URL": [
+        "https"
       ]
     }
   },
@@ -115,6 +141,27 @@
         "postgresql+asyncpg",
         "postgresql+psycopg"
       ]
-    }
+    },
+    "optional": [
+      "LANGSMITH_TRACING",
+      "LANGSMITH_API_KEY",
+      "LANGSMITH_PROJECT",
+      "OBSERVABILITY_WEEKLY_MESSAGES_PER_USER",
+      "OBSERVABILITY_ESTIMATED_INPUT_TOKENS_PER_MESSAGE",
+      "OBSERVABILITY_ESTIMATED_OUTPUT_TOKENS_PER_MESSAGE",
+      "OBSERVABILITY_OPENAI_INPUT_USD_PER_MILLION",
+      "OBSERVABILITY_OPENAI_OUTPUT_USD_PER_MILLION",
+      "OBSERVABILITY_GROQ_INPUT_USD_PER_MILLION",
+      "OBSERVABILITY_GROQ_OUTPUT_USD_PER_MILLION",
+      "OBSERVABILITY_BRL_PER_USD",
+      "OBSERVABILITY_VALUE_PER_RESOLUTION_BRL"
+    ],
+    "booleans": [
+      "LANGSMITH_TRACING"
+    ],
+    "nonnegative_integers": [
+      "OBSERVABILITY_ESTIMATED_INPUT_TOKENS_PER_MESSAGE",
+      "OBSERVABILITY_ESTIMATED_OUTPUT_TOKENS_PER_MESSAGE"
+    ]
   }
 }

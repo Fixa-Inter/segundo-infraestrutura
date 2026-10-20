@@ -14,7 +14,24 @@ from env_config import ConfigError
 
 def clean(state_dir, delete):
     state=json.loads((state_dir/'terraform.tfstate').read_text())
-    buckets=[i['attributes']['bucket'] for r in state.get('resources',[]) if r.get('mode')=='managed' and r.get('type')=='aws_s3_bucket' and r.get('name')=='firebase' for i in r.get('instances',[])]
+    buckets=[]
+    for resource in state.get('resources', []):
+        if resource.get('mode') != 'managed':
+            continue
+        kind=(resource.get('type'),resource.get('name'))
+        for instance in resource.get('instances', []):
+            attrs=instance.get('attributes', {})
+            if kind == ('aws_s3_bucket','firebase'):
+                buckets.append(attrs['bucket'])
+            elif kind == ('terraform_data','firebase_bucket'):
+                value=attrs.get('input', {})
+                # terraform_data usa um atributo dinamico no State JSON.
+                if 'type' in value and 'value' in value:
+                    value=value['value']
+                if not isinstance(value,dict) or not value.get('name'):
+                    raise ConfigError('Identidade do bucket ausente no State')
+                buckets.append(value['name'])
+    buckets=sorted(set(buckets))
     if not buckets:
         return
     account=sync.aws('sts','get-caller-identity')['Account']
