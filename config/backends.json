@@ -50,8 +50,11 @@
       "DB_PASSWORD",
       "JWT_SECRET",
       "JWT_EXPIRATION_SECONDS",
-      "UPSTASH_REDIS_REST_URL",
-      "UPSTASH_REDIS_REST_TOKEN",
+      "SPRING_DATA_REDIS_HOST",
+      "SPRING_DATA_REDIS_PORT",
+      "SPRING_DATA_REDIS_USERNAME",
+      "SPRING_DATA_REDIS_PASSWORD",
+      "SPRING_DATA_REDIS_SSL_ENABLED",
       "MAIL_HOST",
       "MAIL_PORT",
       "MAIL_USERNAME",
@@ -79,7 +82,8 @@
     "booleans": [
       "MAIL_SMTP_AUTH",
       "MAIL_SMTP_STARTTLS",
-      "MAIL_SMTP_STARTTLS_REQUIRED"
+      "MAIL_SMTP_STARTTLS_REQUIRED",
+      "SPRING_DATA_REDIS_SSL_ENABLED"
     ],
     "positive_integers": [
       "JWT_EXPIRATION_SECONDS"
@@ -93,9 +97,6 @@
       ],
       "SPRING_DATASOURCE_URL": [
         "jdbc:postgresql"
-      ],
-      "UPSTASH_REDIS_REST_URL": [
-        "https"
       ]
     }
   },

@@ -14,9 +14,36 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def aws(*args, payload=None):
-    response = subprocess.run(['aws', *args, '--output', 'json', '--no-cli-pager'],
-                              input=json.dumps(payload) if payload is not None else None,
-                              text=True, capture_output=True)
+    command = ['aws', *args, '--output', 'json', '--no-cli-pager']
+
+    if payload is None:
+        response = subprocess.run(
+            command,
+            text=True,
+            capture_output=True,
+        )
+    else:
+        with tempfile.NamedTemporaryFile(
+            mode='w',
+            encoding='utf-8',
+            suffix='.json',
+        ) as temporary:
+            json.dump(payload, temporary, ensure_ascii=False)
+            temporary.flush()
+
+            command = [
+                f'file://{temporary.name}'
+                if argument == 'file:///dev/stdin'
+                else argument
+                for argument in command
+            ]
+
+            response = subprocess.run(
+                command,
+                text=True,
+                capture_output=True,
+            )
+        
     if response.returncode:
         import re
 
