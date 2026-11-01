@@ -32,6 +32,31 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
+DOCKER_STORAGE_DRIVER=$(docker info --format '{{.Driver}}')
+
+cleanup_build_cache() {
+  if [[ "$DOCKER_STORAGE_DRIVER" == vfs ]]; then
+    echo "Liberando cache de build nao utilizado (driver vfs)..."
+    docker builder prune --all --force
+  fi
+}
+
+cleanup_published_image() {
+  [[ "$DOCKER_STORAGE_DRIVER" == vfs ]] || return 0
+  local api="$1" image="$2" reference
+  local references=("$image")
+  if [[ "$api" == mobile || "$api" == web || "$api" == nosql ]]; then
+    references+=("fixa-$api-build:$VERSION")
+  fi
+  # Chamado somente apos conferir ECR e recibo; remove apenas tags deste build.
+  for reference in "${references[@]}"; do
+    if docker image inspect "$reference" >/dev/null 2>&1; then
+      docker image rm "$reference"
+    fi
+  done
+  cleanup_build_cache
+}
+
 ACCOUNT_ID=$(aws sts get-caller-identity \
   --query Account --output text)
 
@@ -86,6 +111,7 @@ if x['commit']!=sys.argv[2] or x['digest']!=sys.argv[3] or x.get('recipe')!=sys.
     sys.exit('Tag imutavel pertence a outro commit/digest/receita de imagem. Escolha uma nova versao.')
 PYCODE
     echo "[OK] Imagem existente corresponde ao commit/digest registrado: $api:$VERSION"
+    cleanup_published_image "$api" "$image"
     return
   else
     if ! grep -q 'ImageNotFoundException' "${receipt}.error"; then
@@ -97,10 +123,13 @@ PYCODE
 
   echo ""
   echo "Construindo ${api}:${VERSION}..."
+  cleanup_build_cache
 
   if [[ "$api" == mobile || "$api" == web || "$api" == nosql ]]; then
     base_image="fixa-$api-build:$VERSION"
     docker build --platform linux/amd64 -t "$base_image" "$app_dir"
+    # Descarta etapas Maven antes do runtime; a imagem base continua com tag.
+    cleanup_build_cache
     # Runtime compartilhado pelas APIs Java; nunca envia env/firebase.json ao Docker.
     docker build --platform linux/amd64 \
       --build-arg "BASE_IMAGE=$base_image" \
@@ -131,6 +160,7 @@ temp.write_text(json.dumps({'commit':sys.argv[2],'digest':sys.argv[3],'recipe':s
 temp.replace(p)
 PYCODE
 
+  cleanup_published_image "$api" "$image"
   echo "[OK] ${api}:${VERSION}"
 }
 

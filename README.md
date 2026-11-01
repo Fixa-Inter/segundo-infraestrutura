@@ -30,6 +30,8 @@ Para integração opcional com DNS, envie um arquivo privado `env/hostinger.toke
 
 Use uma nova versão para cada atualização, por exemplo `entrega-02`. Imagens usam tags imutáveis. O build atualiza os repositórios na branch main, exige árvore limpa e não descarta alterações locais. Uma tag já publicada só é reutilizada se o comprovante local em `.states/` corresponder ao commit e digest atuais. Sem esse comprovante, ou com outro commit, o comando pede uma nova versão. **A tag não é sobrescrita.** Para retomar a mesma implantação, use a mesma tag; para incorporar novos commits, sempre use outra tag. O Terraform resolve a tag para digest SHA256.
 
+Quando o Docker usa o driver `vfs`, o build limpa automaticamente o cache de build não utilizado antes de cada API e entre a compilação Java e o runtime Firebase. Após confirmar a imagem no ECR e salvar seu comprovante, remove as tags locais da imagem publicada e da base Java dessa API e limpa novamente o cache. Imagens já publicadas e conferidas também passam por essa limpeza na retomada. O cache descartado pode incluir builds de outros projetos no mesmo builder; execute os builds sem concorrência. Imagens no ECR, contêineres, volumes, `env/` e `.states/` são preservados. Outros drivers mantêm o cache e as imagens locais. Isso reduz o acúmulo entre APIs; um build individual ainda precisa caber no disco disponível.
+
 ## Contratos de configuração
 
 Os nomes e aliases ficam em `config/backends.json`, baseados nos fontes consultados. A validação rejeita variáveis obrigatórias vazias, duplicatas, expansões shell, URLs locais, portas incompatíveis e valores maiores que 4096 bytes UTF-8. URLs são verificadas sintaticamente; isso não comprova que os serviços externos estão acessíveis.
