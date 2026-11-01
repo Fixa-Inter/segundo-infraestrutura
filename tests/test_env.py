@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 import unittest
@@ -37,16 +38,19 @@ class EnvTests(unittest.TestCase):
 
     def test_required_aliases(self):
         c={'required':['SPRING_DATASOURCE_URL'],'aliases':{'DB_URL':'SPRING_DATASOURCE_URL'}}
-        self.assertIn('SPRING_DATASOURCE_URL',validate('web',{'DB_URL':'jdbc:postgresql://db.example/db'},c))
+        self.assertIn('SPRING_DATASOURCE_URL',validate('web',{'DB_URL':'jdbc:postgresql://db.example/db','FIREBASE_CREDENTIALS_PATH':'/app/secrets/firebase.json'},c))
         with self.assertRaises(ConfigError): validate('web',{'DB_URL':'x','SPRING_DATASOURCE_URL':'y'},c)
         with self.assertRaises(ConfigError): validate('web',{},c)
 
-    def test_mobile_path_is_not_json(self):
-        with self.assertRaises(ConfigError): validate('mobile',{'FIREBASE_CREDENTIALS_PATH':'{}'},{'required':[]})
-        v=validate('mobile',{'FIREBASE_CREDENTIALS_PATH':'/app/secrets/firebase.json'},{'required':[]})
-        self.assertEqual(v['FIREBASE_CREDENTIALS_PATH'],'/app/secrets/firebase.json')
-        with self.assertRaises(ConfigError):
-            validate('mobile',{'FIREBASE_CREDENTIALS_PATH':'/app/secrets/firebase.json','FIREBASE_CREDENTIALS_JSON':'{}'},{'required':[]})
+    def test_firebase_path_and_reserved_variables(self):
+        for api in ('mobile','web','nosql'):
+            with self.subTest(api=api):
+                valid={'FIREBASE_CREDENTIALS_PATH':'/app/secrets/firebase.json'}
+                self.assertEqual(validate(api,valid,{'required':[]}),valid)
+                for invalid in ({},{'FIREBASE_CREDENTIALS_PATH':'{}'},
+                    dict(valid,FIREBASE_CREDENTIALS_JSON='{}'),dict(valid,FIREBASE_S3_BUCKET='manual'),
+                    dict(valid,FIREBASE_CREDENTIALS_SHA256='manual')):
+                    with self.assertRaises(ConfigError): validate(api,invalid,{'required':[]})
 
     def test_sync_only_refs_and_unchanged_is_idempotent(self):
         secret='SENTINEL_NOT_FOR_MANIFEST'
@@ -62,27 +66,46 @@ class EnvTests(unittest.TestCase):
             self.assertEqual(len(files),3)
             for f in files:
                 self.assertNotIn(secret,f.read_text())
-                self.assertEqual(f.stat().st_mode & 0o777,0o600)
+                if os.name == 'posix': self.assertEqual(f.stat().st_mode & 0o777,0o600)
             refs=json.loads(next(Path(d).rglob('ia.secrets.json')).read_text())
             self.assertEqual(refs['API_KEY'],'arn:aws:ssm:us-east-1:123456789012:parameter/fixa/ia/API_KEY')
 
-    def test_mobile_path_and_project_are_public_not_ssm(self):
+    def test_firebase_path_and_project_are_public_not_ssm(self):
         values={'FIREBASE_CREDENTIALS_PATH':'/app/secrets/firebase.json','FIREBASE_PROJECT_ID':'test-project','DB_PASSWORD':'SENTINEL'}
         queried=[]
         def aws(*args,payload=None):
             if args[0]=='sts': return {'Account':'123456789012'}
             queried.append(args)
             return {'Parameter':{'Value':'SENTINEL','Type':'SecureString','Version':1}}
-        with tempfile.TemporaryDirectory() as d,patch.object(sync,'ROOT',Path(d)),patch.object(sync,'aws',aws),patch.object(sync,'load_all',return_value={'mobile':values}),patch.object(sys,'argv',['sync-secrets.py','mobile']):
+        configs={api:dict(values) for api in ('mobile','web','nosql')}
+        with tempfile.TemporaryDirectory() as d,patch.object(sync,'ROOT',Path(d)),patch.object(sync,'aws',aws),patch.object(sync,'load_all',return_value=configs),patch.object(sys,'argv',['sync-secrets.py','all']):
             sync.main()
             p=Path(d)/'.states/123456789012/us-east-1/env'
-            public=json.loads((p/'mobile.public.json').read_text())
-            self.assertEqual(public['FIREBASE_CREDENTIALS_PATH'],'/app/secrets/firebase.json')
-            refs=json.loads((p/'mobile.secrets.json').read_text())
-            self.assertEqual(set(refs),{'DB_PASSWORD'})
-            self.assertEqual(len(queried),1)
+            for api in configs:
+                public=json.loads((p/f'{api}.public.json').read_text())
+                self.assertEqual(public['FIREBASE_CREDENTIALS_PATH'],'/app/secrets/firebase.json')
+                self.assertEqual(public['FIREBASE_PROJECT_ID'],'test-project')
+                refs=json.loads((p/f'{api}.secrets.json').read_text())
+                self.assertEqual(set(refs),{'DB_PASSWORD'})
+            self.assertEqual(len(queried),3)
             for f in p.iterdir():
                 self.assertNotIn('SENTINEL',f.read_text())
+
+    def test_load_all_derives_project_for_each_firebase_service(self):
+        apis=('mobile','web','nosql')
+        credential={'type':'service_account','project_id':'test-project','client_email':'test@example.invalid',
+            'private_key':'-----BEGIN PRIVATE KEY-----\nTEST\n-----END PRIVATE KEY-----'}
+        with tempfile.TemporaryDirectory() as d,patch.object(sync,'ROOT',Path(d)):
+            root=Path(d);(root/'env').mkdir();(root/'config').mkdir()
+            (root/'config/backends.json').write_text(json.dumps({api:{'required':[]} for api in apis}))
+            (root/'env/firebase.json').write_text(json.dumps(credential))
+            for api in apis:
+                (root/'env'/f'{api}.env').write_text('FIREBASE_CREDENTIALS_PATH=/app/secrets/firebase.json\n')
+            configs=sync.load_all(apis)
+            for api in apis:
+                self.assertEqual(configs[api]['FIREBASE_PROJECT_ID'],'test-project')
+            (root/'env/web.env').write_text('FIREBASE_CREDENTIALS_PATH=/app/secrets/firebase.json\nFIREBASE_PROJECT_ID=other\n')
+            with self.assertRaisesRegex(ConfigError,'web: FIREBASE_PROJECT_ID'): sync.load_all(apis)
 
     def test_aws_errors_do_not_echo_payload(self):
         from subprocess import CompletedProcess

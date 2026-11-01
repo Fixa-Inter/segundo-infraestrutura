@@ -153,7 +153,7 @@ python3 "$ROOT/scripts/upload-firebase.py" \
 step 7 "Sincronizando fontes e publicando imagens"
 
 # Esse script já sincroniza os repositórios antes do build.
-# O Mobile recebe o inicializador que baixa o Firebase antes do Java.
+# Mobile, Web e NoSQL recebem o inicializador que baixa o Firebase antes do Java.
 bash "$ROOT/scripts/build-images.sh" all "$VERSION"
 
 step 8 "Sincronizando configuracoes e segredos SSM"

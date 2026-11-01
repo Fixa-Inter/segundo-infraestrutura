@@ -49,7 +49,7 @@ import hashlib,sys
 from pathlib import Path
 root=Path(sys.argv[1]);api=sys.argv[2]
 paths=[root/'apps'/api/'Dockerfile']
-if api=='mobile':
+if api in ('mobile', 'web', 'nosql'):
     paths += [root/'runtime/mobile'/name for name in ('Dockerfile','entrypoint.py','.dockerignore')]
 h=hashlib.sha256()
 for p in paths:
@@ -98,10 +98,10 @@ PYCODE
   echo ""
   echo "Construindo ${api}:${VERSION}..."
 
-  if [[ "$api" == mobile ]]; then
-    base_image="fixa-mobile-build:$VERSION"
+  if [[ "$api" == mobile || "$api" == web || "$api" == nosql ]]; then
+    base_image="fixa-$api-build:$VERSION"
     docker build --platform linux/amd64 -t "$base_image" "$app_dir"
-    # Contexto limitado a runtime/mobile: nunca envia env/firebase.json ao Docker.
+    # Runtime compartilhado pelas APIs Java; nunca envia env/firebase.json ao Docker.
     docker build --platform linux/amd64 \
       --build-arg "BASE_IMAGE=$base_image" \
       --label "org.opencontainers.image.revision=$commit" \

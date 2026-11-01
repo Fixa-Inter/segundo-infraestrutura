@@ -9,8 +9,8 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
-from env_config import ConfigError, parse_env
-from firebase_config import mobile_firebase
+from env_config import FIREBASE_BACKENDS, ConfigError, parse_env
+from firebase_config import service_firebase
 
 spec = importlib.util.spec_from_file_location('sync_secrets', Path(__file__).with_name('sync-secrets.py'))
 sync = importlib.util.module_from_spec(spec)
@@ -20,10 +20,15 @@ REGION = 'us-east-1'
 
 
 def local_config():
-    p = ROOT/'env/mobile.env'
-    if not p.is_file():
-        raise ConfigError('env/mobile.env: arquivo ausente')
-    return mobile_firebase(parse_env(p.read_text(encoding='utf-8-sig')), ROOT/'env/firebase.json')
+    for api in FIREBASE_BACKENDS:
+        p = ROOT/'env'/f'{api}.env'
+        if not p.is_file():
+            raise ConfigError(f'env/{api}.env: arquivo ausente')
+        try:
+            config = service_firebase(parse_env(p.read_text(encoding='utf-8-sig')), ROOT/'env/firebase.json')
+        except ConfigError as exc:
+            raise ConfigError(f'{api}: {exc}') from None
+    return config
 
 
 def outputs(state_dir):
@@ -85,8 +90,9 @@ def upload(state_dir, raw, project, digest):
         'FIREBASE_PROJECT_ID': project,
         'AWS_DEFAULT_REGION': REGION,
     }
-    sync.private_json(state_dir/'env/mobile.firebase.json', manifest)
-    print('[OK] Firebase enviado/conferido no S3 privado; manifesto Mobile atualizado. Conteudo omitido.')
+    for api in FIREBASE_BACKENDS:
+        sync.private_json(state_dir/'env'/f'{api}.firebase.json', manifest)
+    print('[OK] Firebase enviado/conferido no S3 privado; manifestos mobile, web e nosql atualizados. Conteudo omitido.')
 
 
 def main():
@@ -97,7 +103,7 @@ def main():
     os.umask(0o077)
     raw, project, digest = local_config()
     if args.check:
-        print('[OK] env/firebase.json e caminho do Mobile validados; nenhuma chamada AWS realizada.')
+        print('[OK] env/firebase.json e caminhos de mobile, web e nosql validados; nenhuma chamada AWS realizada.')
         return
     if not args.state_dir:
         raise ConfigError('Use ./scripts/upload-firebase.sh para selecionar a conta/regiao automaticamente')

@@ -4,6 +4,7 @@ import re
 from urllib.parse import urlsplit
 
 BACKENDS = ('mobile', 'web', 'nosql', 'ia')
+FIREBASE_BACKENDS = ('mobile', 'web', 'nosql')
 
 class ConfigError(ValueError):
     pass
@@ -161,7 +162,7 @@ def validate(api, values, contract):
                 raise ConfigError(f'{key}: hostname local nao acessa servico externo no Fargate')
         if key.endswith('_HOST') and value.lower() in ('localhost', '127.0.0.1', '::1', 'host.docker.internal'):
             raise ConfigError(f'{key}: host local invalido no Fargate')
-    if api == 'mobile':
+    if api in FIREBASE_BACKENDS:
         if values.get('FIREBASE_CREDENTIALS_PATH') != '/app/secrets/firebase.json':
             raise ConfigError('FIREBASE_CREDENTIALS_PATH: configure /app/secrets/firebase.json')
         if values.get('FIREBASE_CREDENTIALS_JSON'):

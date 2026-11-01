@@ -32,7 +32,7 @@ def read_firebase(path):
     return raw, value['project_id'], hashlib.sha256(raw).hexdigest()
 
 
-def mobile_firebase(values, file_path):
+def service_firebase(values, file_path):
     if values.get('FIREBASE_CREDENTIALS_PATH') != CONTAINER_PATH:
         raise ConfigError(f'FIREBASE_CREDENTIALS_PATH: configure {CONTAINER_PATH}')
     if values.get('FIREBASE_CREDENTIALS_JSON'):

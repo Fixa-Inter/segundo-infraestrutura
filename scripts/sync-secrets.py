@@ -7,8 +7,8 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
-from env_config import BACKENDS, ConfigError, parse_env, validate
-from firebase_config import mobile_firebase
+from env_config import BACKENDS, FIREBASE_BACKENDS, ConfigError, parse_env, validate
+from firebase_config import service_firebase
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -105,8 +105,8 @@ def load_all(selection):
         p.chmod(0o600)
         try:
             result[api] = validate(api, parse_env(p.read_text(encoding='utf-8-sig')), contracts[api])
-            if api == 'mobile':
-                _, project, _ = mobile_firebase(result[api], ROOT/'env/firebase.json')
+            if api in FIREBASE_BACKENDS:
+                _, project, _ = service_firebase(result[api], ROOT/'env/firebase.json')
                 result[api]['FIREBASE_PROJECT_ID'] = project
         except (ConfigError, UnicodeError, ValueError):
             # Validadores sempre geram erros sem valor; erros externos nao devem vazar entrada.
@@ -136,7 +136,7 @@ def main():
         versions = {}
         public = {}
         for key, value in sorted(values.items()):
-            if api == 'mobile' and key in ('FIREBASE_CREDENTIALS_PATH','FIREBASE_PROJECT_ID'):
+            if api in FIREBASE_BACKENDS and key in ('FIREBASE_CREDENTIALS_PATH','FIREBASE_PROJECT_ID'):
                 public[key] = value
                 continue
             # Preserva maiusculas e underscores para nao colidir FOO_BAR e foo_bar.
@@ -155,7 +155,7 @@ def main():
             refs[key] = f'arn:aws:ssm:{args.region}:{account}:parameter{name}'
             versions[key] = version
         private_json(directory/f'{api}.public.json', public)
-        # public.env contem apenas caminho/project ID nao secretos para o Mobile.
+        # public.env contem apenas caminho/project ID nao secretos do Firebase.
         public_env = directory/f'{api}.public.env'
         public_env.write_text(''.join(f'{k}={v}\n' for k,v in sorted(public.items())))
         public_env.chmod(0o600)

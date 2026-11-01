@@ -113,7 +113,7 @@ module "api" {
 
   environment = merge(
     jsondecode(file("${var.manifest_dir}/${each.key}.public.json")),
-    each.key == "mobile" ? jsondecode(file("${var.manifest_dir}/mobile.firebase.json")) : {}
+    contains(["mobile", "web", "nosql"], each.key) ? jsondecode(file("${var.manifest_dir}/${each.key}.firebase.json")) : {}
   )
   secrets = jsondecode(file("${var.manifest_dir}/${each.key}.secrets.json"))
 }

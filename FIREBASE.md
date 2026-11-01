@@ -6,7 +6,7 @@ Esta versão usa o projeto completo revisado. Não misture o `sync-secrets.py` a
 
 Mantenha os quatro `.env` em `env/` e envie a credencial com o nome exato **env/firebase.json**. É o JSON de conta de serviço do Firebase, não o google-services.json do Android. Não coloque a credencial no repositório nem na imagem Docker.
 
-No **env/mobile.env**, mantenha suas variáveis existentes e defina:
+Em **env/mobile.env**, **env/web.env** e **env/nosql.env**, mantenha suas variáveis existentes e defina o mesmo caminho:
 
 ```dotenv
 FIREBASE_CREDENTIALS_PATH=/app/secrets/firebase.json
@@ -19,7 +19,7 @@ Esse caminho pertence ao contêiner. No CloudShell, o arquivo continua em env/fi
 ```bash
 chmod +x deploy.sh destroy.sh scripts/*.sh
 chmod 700 env
-chmod 600 env/mobile.env env/firebase.json
+chmod 600 env/mobile.env env/web.env env/nosql.env env/firebase.json
 ./scripts/upload-firebase.sh --check
 ./scripts/check-env.sh
 ```
@@ -28,7 +28,9 @@ chmod 600 env/mobile.env env/firebase.json
 
 ## 2. Execute o deploy integrado
 
-Use uma **nova tag**, pois a imagem Mobile mudou para incluir o download do Firebase:
+Use uma **nova tag**, pois as imagens Web e NoSQL também precisam incluir o download do Firebase:
+
+Se já houver APIs ativas neste State, execute primeiro `./scripts/upload-firebase.sh` para gerar os novos manifestos Web e NoSQL antes do primeiro plano Terraform da atualização. Em uma instalação nova, o deploy cria o bucket e chama o uploader automaticamente.
 
 ```bash
 ./deploy.sh firebase-01
@@ -48,9 +50,9 @@ O uploader confere conta, nome/dono do bucket, bloqueio público, criptografia e
 
 **Validação pendente:** execute init/validate no CloudShell antes de aprovar qualquer plano. O executor desta revisão continua apresentando a divergência de checksum do provider registrada em AUDITORIA.md. AWS, Docker e credencial real não foram executados/testados nesta revisão.
 
-## 3. Como o Mobile recebe o arquivo
+## 3. Como Mobile, Web e NoSQL recebem o arquivo
 
-O build primeiro compila o Dockerfile original da API. Em seguida cria uma camada de runtime a partir de runtime/mobile/Dockerfile, que instala Python/boto3 e o inicializador, usando um contexto de build que contém apenas esses arquivos — nunca env/firebase.json.
+Para cada uma das três APIs Java, o build primeiro compila o Dockerfile original da API. Em seguida cria uma camada de runtime a partir de runtime/mobile/Dockerfile, compartilhado por Mobile, Web e NoSQL, que instala Python/boto3 e o inicializador, usando um contexto de build que contém apenas esses arquivos — nunca env/firebase.json.
 
 O inicializador:
 
@@ -60,7 +62,7 @@ O inicializador:
 4. Grava /app/secrets/firebase.json com permissão 600, em diretório 700, como usuário sem privilégios.
 5. Inicia o Java somente depois do sucesso. Falha de download/validação encerra a task sem imprimir a credencial.
 
-O Java existente já suporta FIREBASE_CREDENTIALS_PATH. Não é necessário mudar FirebaseTokenVerifier. O arquivo local do contêiner é efêmero: cada task nova baixa novamente o objeto. O objeto anterior no S3 não é apagado durante uma atualização.
+As três tasks recebem FIREBASE_CREDENTIALS_PATH e FIREBASE_PROJECT_ID. O arquivo local do contêiner é efêmero: cada task nova baixa novamente o mesmo objeto. O objeto anterior no S3 não é apagado durante uma atualização.
 
 ## 4. Rodar somente o upload
 
@@ -70,7 +72,7 @@ Depois que o bucket tiver sido criado pelo Terraform deste projeto:
 ./scripts/upload-firebase.sh
 ```
 
-O comando escolhe automaticamente a conta/região e escreve apenas o manifesto da localização do Firebase. Ele **não cria o bucket por fora do State, não inicia o Java e não atualiza tasks já rodando**.
+O comando escolhe automaticamente a conta/região, envia/confere um único objeto e escreve os manifestos `mobile.firebase.json`, `web.firebase.json` e `nosql.firebase.json` em `.states/<conta>/us-east-1/env/`. Ele **não cria o bucket por fora do State, não inicia o Java e não atualiza tasks já rodando**.
 
 Para aplicar uma credencial nova em todo o fluxo:
 
@@ -90,17 +92,17 @@ O manifesto S3 é mesclado nas variáveis da task. Trocar o arquivo muda seu SHA
 
 | Arquivo | Mudança |
 |---|---|
-| config/backends.json | Mobile exige FIREBASE_CREDENTIALS_PATH; não exige JSON na variável |
+| config/backends.json | Mobile, Web e NoSQL exigem FIREBASE_CREDENTIALS_PATH; não exigem JSON na variável |
 | scripts/env_config.py | Valida caminho interno e rejeita JSON/envs S3 definidos manualmente |
 | scripts/firebase_config.py | Valida env/firebase.json e correspondência de projeto |
 | scripts/sync-secrets.py | Caminho/project_id viram configuração comum; senhas continuam SSM |
 | terraform/firebase.tf | Bucket, bloqueio público, criptografia, ownership e política de leitura |
 | scripts/upload-firebase.sh / .py | Upload integrado com detecção de conta, checksum e manifesto |
 | deploy.sh | Chama upload após criar a infraestrutura e antes de ativar APIs |
-| terraform/apis.tf | Injeta bucket/key/owner/checksum nas variáveis Mobile |
+| terraform/apis.tf | Injeta bucket/key/owner/checksum nas variáveis de Mobile, Web e NoSQL |
 | scripts/activation.sh | Preserva configuração comum ao adicionar marcador SSM |
 | runtime/mobile/Dockerfile e entrypoint.py | Preparam arquivo privado antes de iniciar Java |
-| scripts/build-images.sh | Monta imagem Mobile com runtime; recibo inclui receita da imagem |
+| scripts/build-images.sh | Monta as três imagens Java com runtime compartilhado; recibo inclui receita da imagem |
 | scripts/preflight.py | Bloqueia adoção acidental de bucket existente fora deste State |
 | destroy.sh / scripts/cleanup-firebase.py | Exclusão opcional e explícita dos arquivos S3 gerenciados |
 
@@ -128,4 +130,4 @@ Não coloque AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY no .env para este fluxo. O 
 
 Parâmetros SSM de Firebase criados por versões antigas não são apagados automaticamente por esta atualização. Eles deixam de ser referenciados pela task; revise a limpeza dos parâmetros antigos separadamente depois da migração.
 
-Validação local desta entrega: 27 testes passaram, além de sintaxe Bash/Python e formatação Terraform. Os testes S3 são simulados, sem uso de credencial real.
+Os testes em `tests/test_firebase.py` e `tests/test_env.py` cobrem o upload único, os três manifestos, a validação dos três serviços e a separação entre metadados Firebase e segredos SSM. Os testes S3 são simulados, sem uso de credencial real. `tests/test_build.py` verifica a camada de runtime e a retomada dos builds das três APIs em ambiente POSIX.

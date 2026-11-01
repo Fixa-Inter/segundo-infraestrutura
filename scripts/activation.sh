@@ -23,7 +23,9 @@ activate() {
     aws ecr describe-images --repository-name "fixa/$api-api" --image-ids "imageTag=$version" >/dev/null
     [[ -s "$STATE_DIR/env/$api.secrets.json" ]] || fail "Manifesto ausente para $api na conta/regiao atual"
   done
-  [[ -s "$STATE_DIR/env/mobile.firebase.json" ]] || fail "Execute ./scripts/upload-firebase.sh antes de ativar Mobile"
+  for api in mobile web nosql; do
+    [[ -s "$STATE_DIR/env/$api.firebase.json" ]] || fail "Execute ./scripts/upload-firebase.sh antes de ativar $api"
+  done
   # Versoes SSM entram como marcador nao secreto para reiniciar tasks quando houver alteracao.
   python3 - "$STATE_DIR" "$version" <<'PY'
 import json,sys,hashlib

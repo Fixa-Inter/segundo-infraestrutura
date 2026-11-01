@@ -59,7 +59,7 @@ def main():
     import boto3
     s3 = boto3.client('s3',region_name='us-east-1')
     prepare_firebase(os.environ,s3)
-    print('[OK] Credencial Firebase preparada; iniciando Mobile.',flush=True)
+    print('[OK] Credencial Firebase preparada; iniciando API.',flush=True)
     if len(sys.argv) < 2:
         raise RuntimeError('Comando Java ausente')
     os.execvp(sys.argv[1],sys.argv[1:])
@@ -69,5 +69,5 @@ if __name__ == '__main__':
         main()
     except Exception:
         # Nem resposta S3, nem arquivo, nem excecoes do SDK sao enviados ao log.
-        print('[ERRO] Nao foi possivel preparar Firebase. Verifique arquivo, checksum e permissoes S3 da Task Role. Mobile nao iniciado.',file=sys.stderr)
+        print('[ERRO] Nao foi possivel preparar Firebase. Verifique arquivo, checksum e permissoes S3 da Task Role. API nao iniciada.',file=sys.stderr)
         sys.exit(1)

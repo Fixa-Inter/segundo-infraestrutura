@@ -2,6 +2,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -11,7 +12,7 @@ from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'scripts'))
 from env_config import ConfigError
-from firebase_config import mobile_firebase,read_firebase
+from firebase_config import service_firebase,read_firebase
 
 def module(name,path):
     spec=importlib.util.spec_from_file_location(name,path)
@@ -30,12 +31,29 @@ class FirebaseTests(unittest.TestCase):
     def test_local_file_and_project(self):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/'firebase.json';p.write_bytes(fixture())
-            raw,project,digest=mobile_firebase({'FIREBASE_CREDENTIALS_PATH':'/app/secrets/firebase.json'},p)
+            raw,project,digest=service_firebase({'FIREBASE_CREDENTIALS_PATH':'/app/secrets/firebase.json'},p)
             self.assertEqual(project,'test-project')
             self.assertEqual(digest,hashlib.sha256(raw).hexdigest())
-            self.assertEqual(p.stat().st_mode&0o777,0o600)
+            if os.name == 'posix': self.assertEqual(p.stat().st_mode&0o777,0o600)
             with self.assertRaises(ConfigError):
-                mobile_firebase({'FIREBASE_CREDENTIALS_PATH':'/app/secrets/firebase.json','FIREBASE_PROJECT_ID':'other'},p)
+                service_firebase({'FIREBASE_CREDENTIALS_PATH':'/app/secrets/firebase.json','FIREBASE_PROJECT_ID':'other'},p)
+    def test_check_validates_every_service_without_aws(self):
+        with tempfile.TemporaryDirectory() as d,patch.object(uploader,'ROOT',Path(d)),patch.object(uploader.sync,'aws') as aws:
+            env=Path(d)/'env';env.mkdir();(env/'firebase.json').write_bytes(fixture())
+            for api in ('mobile','web','nosql'):
+                (env/f'{api}.env').write_text('FIREBASE_CREDENTIALS_PATH=/app/secrets/firebase.json\n')
+            with patch.object(sys,'argv',['upload-firebase.py','--check']): uploader.main()
+            aws.assert_not_called()
+            for api in ('mobile','web','nosql'):
+                with self.subTest(api=api):
+                    p=env/f'{api}.env';original=p.read_text()
+                    for invalid in ('FIREBASE_CREDENTIALS_PATH={}\n',original+'FIREBASE_PROJECT_ID=other\n'):
+                        p.write_text(invalid)
+                        with self.assertRaisesRegex(ConfigError,api): uploader.local_config()
+                    p.unlink()
+                    with self.assertRaisesRegex(ConfigError,f'{api}.env'): uploader.local_config()
+                    p.write_text(original)
+            aws.assert_not_called()
     def test_missing_file_and_invalid_json_hide_contents(self):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/'firebase.json'
@@ -60,7 +78,7 @@ class FirebaseTests(unittest.TestCase):
                 return {'ChecksumSHA256':check,'ContentLength':len(raw)}
             if op=='put-object':
                 p=Path(args[args.index('--body')+1]);self.assertEqual(p.read_bytes(),raw)
-                self.assertEqual(p.stat().st_mode&0o777,0o600)
+                if os.name == 'posix': self.assertEqual(p.stat().st_mode&0o777,0o600)
                 self.assertIn('--if-none-match',args)
                 uploaded[0]=True
                 return {}
@@ -74,11 +92,19 @@ class FirebaseTests(unittest.TestCase):
                     self.assertFalse(any(c[1]=='put-object' for c in calls if len(c)>1))
                     return
                 uploader.upload(state,raw,'test-project',digest)
-                text=(state/'env/mobile.firebase.json').read_text()
-                self.assertNotIn('TEST_SENTINEL',text)
-                self.assertIn('FIREBASE_S3_BUCKET',text)
+                manifests=[]
+                for api in ('mobile','web','nosql'):
+                    text=(state/'env'/f'{api}.firebase.json').read_text()
+                    self.assertNotIn('TEST_SENTINEL',text)
+                    manifests.append(json.loads(text))
+                self.assertEqual(manifests,[manifests[0]]*3)
+                self.assertEqual(manifests[0]['FIREBASE_S3_KEY'],f'firebase/{digest}.json')
+                self.assertEqual(manifests[0]['FIREBASE_PROJECT_ID'],'test-project')
+                self.assertFalse((state/'env/ia.firebase.json').exists())
         return calls
-    def test_upload_validates_privacy_and_checksum(self): self.upload_fake()
+    def test_upload_validates_privacy_and_checksum(self):
+        calls=self.upload_fake()
+        self.assertEqual(sum(c[1]=='put-object' for c in calls if len(c)>1),1)
     def test_existing_object_is_not_uploaded_again(self):
         calls=self.upload_fake(existing=True)
         self.assertFalse(any(c[1]=='put-object' for c in calls if len(c)>1))
@@ -95,7 +121,7 @@ class FirebaseTests(unittest.TestCase):
                 'FIREBASE_S3_BUCKET':'fixa-secrets-123456789012-us-east-1','FIREBASE_S3_KEY':f'firebase/{digest}.json','FIREBASE_PROJECT_ID':'test-project'}
             with patch.object(entry,'CREDENTIAL_PATH',target): entry.prepare_firebase(env,S3())
             self.assertEqual(Path(target).read_bytes(),raw)
-            self.assertEqual(Path(target).stat().st_mode&0o777,0o600)
+            if os.name == 'posix': self.assertEqual(Path(target).stat().st_mode&0o777,0o600)
             env['FIREBASE_CREDENTIALS_SHA256']='b'*64;env['FIREBASE_S3_KEY']='firebase/'+'b'*64+'.json'
             with patch.object(entry,'CREDENTIAL_PATH',target),self.assertRaises(RuntimeError): entry.prepare_firebase(env,S3())
     def test_cleanup_requires_explicit_flag_and_rejects_other_files(self):

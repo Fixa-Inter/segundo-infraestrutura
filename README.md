@@ -6,7 +6,7 @@ Infraestrutura Terraform para quatro APIs, ECS Fargate, um ALB, ECR, ACM e SSM e
 
 ## Firebase em arquivo (atualização)
 
-O Mobile agora usa **env/firebase.json → S3 privado → /app/secrets/firebase.json**. Configure FIREBASE_CREDENTIALS_PATH com esse caminho e remova FIREBASE_CREDENTIALS_JSON. O deploy cria o bucket e envia o arquivo automaticamente; a imagem Mobile baixa e valida a credencial antes do Java. Siga [FIREBASE.md](FIREBASE.md) para os comandos completos e a lista de arquivos alterados.
+Mobile, Web e NoSQL usam **env/firebase.json → S3 privado → /app/secrets/firebase.json**, compartilhando um único upload. Configure FIREBASE_CREDENTIALS_PATH com esse caminho nos três `.env` e remova FIREBASE_CREDENTIALS_JSON. O deploy cria o bucket e envia o arquivo automaticamente; cada imagem Java baixa e valida a credencial antes de iniciar a API. Use uma nova tag para reconstruir as imagens Web e NoSQL com o inicializador. Siga [FIREBASE.md](FIREBASE.md) para os comandos completos e a lista de arquivos alterados.
 
 ## Preparação
 
@@ -35,8 +35,8 @@ Use uma nova versão para cada atualização, por exemplo `entrega-02`. Imagens 
 Os nomes e aliases ficam em `config/backends.json`, baseados nos fontes consultados. A validação rejeita variáveis obrigatórias vazias, duplicatas, expansões shell, URLs locais, portas incompatíveis e valores maiores que 4096 bytes UTF-8. URLs são verificadas sintaticamente; isso não comprova que os serviços externos estão acessíveis.
 
 - **Mobile:** DB_URL, DB_USERNAME, DB_PASSWORD, REDIS_HOST, REDIS_PASSWORD, JWT_SECRET, MAIL_HOST, MAIL_USERNAME, MAIL_PASSWORD e FIREBASE_CREDENTIALS_PATH=/app/secrets/firebase.json. O arquivo env/firebase.json é enviado ao S3 e baixado pelo inicializador da imagem. FIREBASE_PROJECT_ID é derivado/verificado com o arquivo.
-- **NoSQL:** DB_URL, DB_USERNAME, DB_PASSWORD, REDIS_HOST, REDIS_PASSWORD, JWT_SECRET e MONGODB_URI.
-- **Web:** SPRING_DATASOURCE_*, SPRING_DATA_REDIS_*, SPRING_MAIL_* e SECURITY_JWT_SECRET/SECURITY_JWT_EXPIRATIONSECONDS. Os aliases DB_*, REDIS_*, MAIL_* e JWT_SECRET são traduzidos explicitamente. JWT_SECRET da Web deve estar em Base64 e conter ao menos 32 bytes após decodificação. O contrato exige Redis/SMTP para os fluxos de recuperação de senha; ajuste deliberadamente se esses fluxos forem desativados no código.
+- **NoSQL:** DB_URL, DB_USERNAME, DB_PASSWORD, REDIS_HOST, REDIS_PASSWORD, JWT_SECRET, MONGODB_URI e FIREBASE_CREDENTIALS_PATH=/app/secrets/firebase.json.
+- **Web:** SPRING_DATASOURCE_*, SPRING_DATA_REDIS_*, SPRING_MAIL_*, SECURITY_JWT_SECRET/SECURITY_JWT_EXPIRATIONSECONDS e FIREBASE_CREDENTIALS_PATH=/app/secrets/firebase.json. Os aliases DB_*, REDIS_*, MAIL_* e JWT_SECRET são traduzidos explicitamente. JWT_SECRET da Web deve estar em Base64 e conter ao menos 32 bytes após decodificação. O contrato exige Redis/SMTP para os fluxos de recuperação de senha; ajuste deliberadamente se esses fluxos forem desativados no código.
 - **IA:** GEMINI_API_KEY, GROQ_API_KEY, OPENAI_API_KEY, DATABASE_URL_SOLICITANTE, DATABASE_URL_TECNICO, DATABASE_URL_GESTOR, **MONGO_URI**, QDRANT_API_KEY, QDRANT_URL e FIXA_API_BASE_URL. O código lê MONGO_URI, embora uma mensagem interna o chame MONGODB_URI. FIXA_API_BASE_URL usa HTTPS e deve apontar para o backend correto para os endpoints consumidos.
 
 Variáveis opcionais vazias são omitidas porque o SSM não aceita valor vazio. As configurações que restarem são tratadas como SecureString, exceto o caminho local/project_id do Firebase. O conteúdo do arquivo Firebase é tratado separadamente no S3. Não há classificação por substring nem valores de `.env` enviados ao State. Um `FIXA_CONFIG_REVISION` não secreto força nova task quando uma versão SSM muda. Isso também reinicia tasks se os ARNs permanecerem iguais.
@@ -48,7 +48,7 @@ Formatos aceitos: `CHAVE=valor`, `export CHAVE=valor`, aspas simples ou duplas, 
 1. Validação dos quatro `.env`, ferramentas e Docker.
 2. Identificação STS e State local separado em `.states/<conta>/us-east-1/`.
 3. Verificação de conflitos e rotas das subnets; criação da base e ECR.
-4. Upload de env/firebase.json ao bucket privado; checkout dos quatro repositórios, builds linux/amd64 e publicação. Mobile recebe uma camada de inicialização para baixar o arquivo do S3.
+4. Upload único de env/firebase.json ao bucket privado; checkout dos quatro repositórios, builds linux/amd64 e publicação. Mobile, Web e NoSQL recebem uma camada de inicialização para baixar o arquivo do S3.
 5. Sincronização SSM e manifestos de ARNs por conta/região.
 6. ACM: com token, plano e confirmação dos registros de validação; espera até cinco minutos. Sem token ou com propagação pendente, encerra com código 2 e instruções para retomar.
 7. Após ACM ISSUED, habilita HTTPS e as quatro APIs em um plano revisável.
