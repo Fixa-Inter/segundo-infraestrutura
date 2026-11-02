@@ -46,7 +46,7 @@
   },
   "web": {
     "required": [
-      "DB_URL",
+      "HOST",
       "DB_USERNAME",
       "DB_PASSWORD",
       "FIREBASE_CREDENTIALS_PATH",
