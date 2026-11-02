@@ -1,0 +1,13 @@
+# Configuracoes privadas e artefatos locais
+env/*
+!env/.gitkeep
+.states/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+.env
+.env.*
+apps/
+__pycache__/
+*.pyc
