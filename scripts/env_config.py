@@ -147,7 +147,7 @@ def validate(api, values, contract):
                 raise ConfigError(f'{key}: Base64 valido com ao menos 32 bytes decodificados esperado') from None
         if key == 'SECURITY_JWT_EXPIRATIONSECONDS' and (not value.isdigit() or int(value) <= 0):
             raise ConfigError(f'{key}: inteiro positivo esperado')
-        if key.endswith(('_URL', '_URI')) or key.startswith('DATABASE_URL_'):
+        if key.endswith(('_URL', '_URI','HOST')) or key.startswith('DATABASE_URL_'):
             try:
                 parsed = urlsplit(value.removeprefix('jdbc:'))
                 host = parsed.hostname
