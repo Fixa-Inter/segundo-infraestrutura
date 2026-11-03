@@ -171,7 +171,7 @@ def validate(api, values, contract):
             if key.startswith('FIREBASE_S3_') or key == 'FIREBASE_CREDENTIALS_SHA256':
                 raise ConfigError(f'{key}: reservado ao upload automatizado; remova do .env')
     for key in contract.get('required', []):
-        if key.endswith('_URL') or key.startswith('DATABASE_URL_'):
+        if key.endswith(('_URL', '_URI')) or key.startswith('DATABASE_URL_'):
             if key not in values:
                 raise ConfigError(f'{key}: obrigatoria ausente')
     for key, schemes in contract.get('url_schemes', {}).items():
